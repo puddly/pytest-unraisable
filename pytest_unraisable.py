@@ -1,7 +1,6 @@
 import gc
 import sys
 import warnings
-import contextlib
 
 import pytest
 
@@ -37,15 +36,15 @@ class catch_unraisable_exception:
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_pyfunc_call(pyfuncitem):
-    if hasattr(sys, "unraisablehook"):
-        catch_unraisable = catch_unraisable_exception()
-    else:
-        catch_unraisable = contextlib.nullcontext()
+    # This hook should be a no-op if there is no `sys.unraisablehook`
+    if not hasattr(sys, "unraisablehook"):
+        yield
+        return
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
 
-        with catch_unraisable as cm:
+        with catch_unraisable_exception() as cm:
             yield 
             gc.collect()
 
