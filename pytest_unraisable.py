@@ -1,6 +1,5 @@
 import gc
 import sys
-import warnings
 
 import pytest
 
@@ -36,13 +35,19 @@ class catch_unraisable_exception:
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_pyfunc_call(pyfuncitem):
+    if "catch_unraisable" not in pyfuncitem.keywords:
+        yield
+        return
+
     # This hook should be a no-op if there is no `sys.unraisablehook`
     if not hasattr(sys, "unraisablehook"):
         yield
         return
 
+    options = pyfuncitem.get_closest_marker("catch_unraisable")
+
     with warnings.catch_warnings():
-        warnings.simplefilter("error")
+        warnings.filterwarnings("error", **options.kwargs)
 
         with catch_unraisable_exception() as cm:
             yield 
@@ -50,3 +55,10 @@ def pytest_pyfunc_call(pyfuncitem):
 
             if cm.unraisable is not None:
                 raise cm.unraisable.exc_value
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers",
+        "catch_unraisable(**kwargs): treat logged unraisable exception warnings as"
+        " errors. **kwargs are passed into warnings.filterwarnings"
+    )
